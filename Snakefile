@@ -45,10 +45,12 @@ with open(meraculous_config_file, 'rt') as f:
 
 rule target:
     input:
+        'output/020_merge/ihist.txt',
+        'output/030_norm/kmer_plot.pdf',
         expand(('output/04_meraculous/{read_set}_k{k}_diplo{diplo}/'
                 'meraculous_final_results/final.scaffolds.fa'),
                read_set=['norm', 'trim-decon'],
-               k=['31', '71', '127'],
+               k=['31', '71', '101'],
                diplo=['0', '1'])
 
 # 04 launch meraculous
@@ -63,7 +65,7 @@ rule meraculous:
                    'meraculous_final_results/final.scaffolds.fa'),
     params:
         outdir = 'output/04_meraculous/{read_set}_k{k}_diplo{diplo}/',
-        dmin = '21'
+        dmin = '0'
     threads:
         50
     log:
@@ -79,7 +81,7 @@ rule meraculous:
         with open(output.config, 'wt') as f:
             f.write(my_conf)
         shell(
-            'bin/meraculous/run_meraculous.sh '
+            'run_meraculous.sh '
             '-dir {params.outdir} '
             '-config {output.config} '
             '&> {log}')
@@ -92,6 +94,10 @@ rule plot_kmer_coverage:
         peaks = 'output/030_norm/peaks.txt'
     output:
         plot = 'output/030_norm/kmer_plot.pdf'
+    threads:
+        1
+    log:
+        log = 'output/logs/030_norm/plot_kmer_coverage.log'
     script:
         'src/plot_kmer_coverage.R'
 
@@ -105,9 +111,11 @@ rule bbnorm:
         hist_out = 'output/030_norm/hist_out.txt',
         peaks = 'output/030_norm/peaks.txt'
     log:
-        norm = 'output/logs/030_norm.log'
+        norm = 'output/logs/030_norm/bbnorm.log'
+    params:
+        target = 60
     threads:
-        50
+        25
     shell:
         'bbnorm.sh '
         'in={input.fq} '
@@ -116,7 +124,7 @@ rule bbnorm:
         'outt={output.fq_toss} '
         'hist={output.hist} '
         'histout={output.hist_out} '
-        'target=60 '
+        'target={params.target} '
         'min=5 '
         'peaks={output.peaks} '
         '2> {log.norm} '  
@@ -132,7 +140,7 @@ rule bbmerge:
     log:
         merge = 'output/logs/020_merge.log'
     threads:
-        20
+        25
     shell:
         'bbmerge.sh '
         'threads={threads} '
@@ -160,7 +168,7 @@ rule trim_decon:
         filter = bbduk_ref,
         trim = bbduk_adaptors
     threads:
-        20
+        25
     shell:
         'bbduk.sh '
         'threads={threads} '

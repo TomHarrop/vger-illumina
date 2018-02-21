@@ -11,6 +11,7 @@ hist_before_file <- snakemake@input[["hist_before"]]
 hist_after_file <- snakemake@input[["hist_after"]]
 peak_file <- snakemake@input[["peaks"]]
 plot_file <- snakemake@output[["plot"]]
+log_file <- snakemake@log[["log"]]
 
 # dev
 # hist_before_file <- "output/030_norm/hist.txt"
@@ -21,6 +22,12 @@ plot_file <- snakemake@output[["plot"]]
 # MAIN #
 ########
 
+# set log
+log <- file(log_file, open = "wt")
+sink(log, type = "message")
+sink(log, append = TRUE, type = "output")
+
+# read data
 before_data <- fread(hist_before_file)
 after_data <- fread(hist_after_file)
 peaks <- fread(paste("grep '^[^#]'", peak_file))
@@ -72,3 +79,6 @@ ggsave(filename = plot_file,
        width = 10,
        height = 7.5,
        units = "in")
+
+# write session info
+sessionInfo()
