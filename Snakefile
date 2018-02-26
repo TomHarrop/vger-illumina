@@ -1,11 +1,26 @@
 #!/usr/bin/env python3
 
+import os
 import pathlib
 
 
 #############
 # FUNCTIONS #
 #############
+
+def find_completed_assemblies(wildcards):
+    my_files = list((dirpath, filenames)
+                    for (dirpath, dirnames, filenames) 
+                    in os.walk('output/04_meraculous'))
+    my_fasta_files = []
+    for dirpath, filenames in my_files:
+        for filename in filenames:
+            if ('final.scaffolds.fa' in filename 
+                    and 'meraculous_final_results' in dirpath):
+                my_path = os.path.join(dirpath, filename)
+                my_fasta_files.append(my_path)
+    return(my_fasta_files)
+
 
 def resolve_path(x):
     mypath = pathlib.Path(x).resolve()
@@ -51,7 +66,40 @@ rule target:
                 'meraculous_final_results/final.scaffolds.fa'),
                read_set=['norm', 'trim-decon'],
                k=['31', '71', '101'],
-               diplo=['0', '1'])
+               diplo=['0', '1']),
+        expand(('output/04_meraculous/trim-decon_k{k}_diplo0/'
+                'meraculous_final_results/final.scaffolds.fa'),
+               k=['61', '81', '91'])
+
+
+# 05 run bbmap stats on completed assemblies
+rule stats_plot:
+    input:
+        stats = 'output/050_assembly-stats/stats.txt'
+    output:
+        plot = 'output/050_assembly-stats/assembly_stats.pdf'
+    log:
+        log = 'output/logs/050_assembly-stats/plot.log'
+    script:
+        'src/plot_assembly_stats.R'
+
+rule bbmap_stats:
+    input:
+        fa = find_completed_assemblies
+    output:
+        stats = 'output/050_assembly-stats/stats.txt'
+    log:
+        'output/logs/050_assembly-stats/stats.log'
+    threads:
+        1
+    run:
+        my_inputfiles = ','.join(input.fa)
+        shell('statswrapper.sh '
+              'in={my_inputfiles} '
+              'minscaf=1000 '
+              'format=3 '
+              '> {output.stats} '
+              '2> {log}')
 
 # 04 launch meraculous
 rule meraculous:
