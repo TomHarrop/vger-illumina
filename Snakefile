@@ -236,6 +236,8 @@ rule kraken:
         '--threads {threads} '
         '--db {input.db} '
         '--paired '
+        '--report-zero-counts '
+        '--use-mpa-style '
         '--output {output.out} '
         '--report {output.report} '
         '--use-names '
