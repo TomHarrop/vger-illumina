@@ -46,6 +46,13 @@ bbduk_ref = 'venv/bin/resources/phix174_ill.ref.fa.gz'
 bbduk_adaptors = 'venv/bin/resources/adapters.fa'
 meraculous_config_file = 'src/meraculous_config.txt'
 
+# containers
+kraken_container = 'shub://TomHarrop/singularity-containers:kraken_2.0.7beta'
+bbduk_container = 'shub://TomHarrop/singularity-containers:bbmap_38.00'
+mer_container = 'shub://TomHarrop/singularity-containers:meraculous_2.2.6'
+r_container = 'shub://TomHarrop/singularity-containers:r_3.5.1'
+
+
 #########
 # SETUP #
 #########
@@ -60,6 +67,7 @@ with open(meraculous_config_file, 'rt') as f:
 
 rule target:
     input:
+        'output/011_kraken/kraken_report.txt',
         'output/020_merge/ihist.txt',
         'output/030_norm/kmer_plot.pdf',
         expand(('output/04_meraculous/{read_set}_k{k}_diplo{diplo}/'
@@ -69,7 +77,7 @@ rule target:
                diplo=['0', '1']),
         expand(('output/04_meraculous/trim-decon_k{k}_diplo0/'
                 'meraculous_final_results/final.scaffolds.fa'),
-               k=['61', '81', '91'])
+               k=['61', '67', '69', '73', '75', '81', '91'])
 
 
 # 05 run bbmap stats on completed assemblies
@@ -132,6 +140,7 @@ rule meraculous:
             'run_meraculous.sh '
             '-dir {params.outdir} '
             '-config {output.config} '
+            '-cleanup_level 2 '
             '&> {log}')
 
 # 03 normalise input
@@ -146,6 +155,8 @@ rule plot_kmer_coverage:
         1
     log:
         log = 'output/logs/030_norm/plot_kmer_coverage.log'
+    singularity:
+        r_container
     script:
         'src/plot_kmer_coverage.R'
 
@@ -164,6 +175,8 @@ rule bbnorm:
         target = 60
     threads:
         25
+    singularity:
+        bbduk_container
     shell:
         'bbnorm.sh '
         'in={input.fq} '
@@ -189,6 +202,8 @@ rule bbmerge:
         merge = 'output/logs/020_merge.log'
     threads:
         25
+    singularity:
+        bbduk_container
     shell:
         'bbmerge.sh '
         'threads={threads} '
@@ -198,6 +213,55 @@ rule bbmerge:
         'outu={output.unmerged} '
         'ihist={output.ihist} '
         '2> {log.merge} '
+
+# 011 run kraken on decontaminated reads
+rule kraken:
+    input:
+        r1 = 'output/011_kraken/r1.fq.gz',
+        r2 = 'output/011_kraken/r2.fq.gz',
+        db = directory('data/20180917-krakendb')
+    output:
+        out = 'output/011_kraken/kraken_out.txt',
+        report = 'output/011_kraken/kraken_report.txt'
+    log:
+        'output/logs/011_kraken/kraken.log'
+    threads:
+        50
+    priority:
+        10
+    singularity:
+        kraken_container
+    shell:
+        'kraken2 '
+        '--threads {threads} '
+        '--db {input.db} '
+        '--paired '
+        '--output {output.out} '
+        '--report {output.report} '
+        '--use-names '
+        '{input.r1} {input.r2} '
+        '&> {log}'
+
+rule split:
+    input:
+        fq = 'output/010_trim-decon/vger.fq.gz'
+    output:
+        r1 = temp('output/011_kraken/r1.fq.gz'),
+        r2 = temp('output/011_kraken/r2.fq.gz')
+    threads:
+        25
+    log:
+        'output/logs/011_kraken/reformat.log'
+    singularity:
+        bbduk_container
+    shell:
+        'reformat.sh '
+        'in={input.fq} '
+        'int=t '
+        'out={output.r1} '
+        'out2={output.r2} '
+        '2> {log}'
+
 
 # 01 trim and decontaminate reads
 rule trim_decon:
@@ -217,6 +281,8 @@ rule trim_decon:
         trim = bbduk_adaptors
     threads:
         25
+    singularity:
+        bbduk_container
     shell:
         'bbduk.sh '
         'threads={threads} '
